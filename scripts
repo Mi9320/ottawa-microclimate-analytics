@@ -1,1 +1,131 @@
 
+"""
+Ottawa Microclimate & Canopy Analytics Platform
+Spatial ETL & Raster Math Pipeline
+
+Description:
+Automated geoprocessing script to compute Normalized Difference Vegetation Index (NDVI)
+from Sentinel-2 telemetry and Land Surface Temperature (LST) from Landsat 9 TIRS.
+Executes Zonal Statistics to aggregate raster outputs into municipal neighborhood vectors.
+
+Author: Ibrahim Mirza
+Date: May 2026
+"""
+
+import os
+import arcpy
+from arcpy.sa import *
+
+# ---------------------------------------------------------
+# STEP 1: ENVIRONMENT & PATH ARCHITECTURE SETUP
+# ---------------------------------------------------------
+arcpy.env.overwriteOutput = True
+
+# Define project root directory. 
+# INSTRUCTION: When deploying to a new machine, only this single variable needs to change.
+PROJECT_DIR = r"C:\GIS_Workspace\Urban_Canopy_Optimization"
+
+# Define standard sub-directories
+RAW_DATA_DIR = os.path.join(PROJECT_DIR, "Data", "Raw_Satellite_Data")
+CLEAN_DATA_DIR = os.path.join(PROJECT_DIR, "Data", "Cleaned_Raster_Data")
+GDB_PATH = os.path.join(PROJECT_DIR, "Ottawa_Canopy_Model.gdb")
+
+arcpy.env.workspace = RAW_DATA_DIR
+
+# Ensure output directories exist before processing
+if not os.path.exists(CLEAN_DATA_DIR):
+    os.makedirs(CLEAN_DATA_DIR)
+    print(f"[*] Created new output directory: {CLEAN_DATA_DIR}")
+
+print("[*] Environment configured. Locating satellite telemetry...")
+
+# ---------------------------------------------------------
+# STEP 2: TELEMETRY TARGET MAPPING
+# ---------------------------------------------------------
+# Sentinel-2 (10m Resolution) - East Tile
+EAST_RED = os.path.join(RAW_DATA_DIR, "T18TVR_EAST_OTTAWA", "T18TVR_20250815T155921_B04_10m.jp2")
+EAST_NIR = os.path.join(RAW_DATA_DIR, "T18TVR_EAST_OTTAWA", "T18TVR_20250815T155921_B08_10m.jp2")
+
+# Sentinel-2 (10m Resolution) - West Tile
+WEST_RED = os.path.join(RAW_DATA_DIR, "T18TVQ_WEST_OTTAWA", "T18TVQ_20250815T155921_B04_10m.jp2")
+WEST_NIR = os.path.join(RAW_DATA_DIR, "T18TVQ_WEST_OTTAWA", "T18TVQ_20250815T155921_B08_10m.jp2")
+
+# Landsat 9 (Level-2 Surface Temperature) - Band 10
+THERMAL_BAND = os.path.join(RAW_DATA_DIR, "LC09_L2SP_016028_20250811_20250815_02_T1_ST_B10.TIF")
+
+print("[*] Telemetry targets locked.")
+
+# ---------------------------------------------------------
+# STEP 3: HIGH-PERFORMANCE DECOUPLED TIF MOSAIC (NDVI)
+# ---------------------------------------------------------
+print("[*] Initializing Raster Math Engine...")
+
+# 1. Calculate West Tile NDVI
+print("    -> Calculating West Ottawa NDVI...")
+west_ndvi = (Float(Raster(WEST_NIR)) - Float(Raster(WEST_RED))) / (Float(Raster(WEST_NIR)) + Float(Raster(WEST_RED)))
+west_temp_path = os.path.join(CLEAN_DATA_DIR, "west_ndvi_temp.tif")
+west_ndvi.save(west_temp_path)
+
+# 2. Calculate East Tile NDVI
+print("    -> Calculating East Ottawa NDVI...")
+east_ndvi = (Float(Raster(EAST_NIR)) - Float(Raster(EAST_RED))) / (Float(Raster(EAST_NIR)) + Float(Raster(EAST_RED)))
+east_temp_path = os.path.join(CLEAN_DATA_DIR, "east_ndvi_temp.tif")
+east_ndvi.save(east_temp_path)
+
+# 3. Mosaic physical TIF tiles into a seamless raster
+print("    -> Stitching physical TIF tiles into seamless Ottawa NDVI map...")
+arcpy.management.MosaicToNewRaster(
+    input_rasters=[west_temp_path, east_temp_path],
+    output_location=CLEAN_DATA_DIR,
+    raster_dataset_name_with_extension="Ottawa_NDVI_Final.tif",
+    number_of_bands=1,
+    pixel_type="32_BIT_FLOAT"
+)
+
+print("[+] SUCCESS: Seamless NDVI Raster Generated.")
+
+# ---------------------------------------------------------
+# STEP 4: LAND SURFACE TEMPERATURE (LST) CALCULATION
+# ---------------------------------------------------------
+print("[*] Initializing Thermal Math Engine...")
+
+# Apply USGS Landsat 9 Collection 2 scaling factors and convert Kelvin to Celsius
+# Multiplier: 0.00341802 | Add offset: 149.0 | Kelvin Conversion: -273.15
+print("    -> Processing LST thermal conversion algorithms...")
+lst_celsius = (Float(Raster(THERMAL_BAND)) * 0.00341802 + 149.0) - 273.15
+
+# Save directly as TIF to bypass Geodatabase bottlenecking
+out_thermal_path = os.path.join(CLEAN_DATA_DIR, "Ottawa_LST_Celsius.tif")
+lst_celsius.save(out_thermal_path)
+
+print("[+] SUCCESS: Thermal LST Raster Generated.")
+
+# ---------------------------------------------------------
+# STEP 5: ZONAL STATISTICS & VECTOR SYNTHESIS
+# ---------------------------------------------------------
+print("[*] Initiating Zonal Statistics Analysis...")
+
+# Define inputs for spatial joins
+neighborhoods = os.path.join(GDB_PATH, "Neighbourhood_Tree_Counts")
+ndvi_tif = os.path.join(CLEAN_DATA_DIR, "Ottawa_NDVI_Final.tif")
+lst_tif = os.path.join(CLEAN_DATA_DIR, "Ottawa_LST_Celsius.tif")
+
+ZONE_FIELD = "ONS_ID"
+
+# 1. Extract and Join Temperature Data
+print("    -> Aggregating mean temperatures per municipal zone...")
+lst_table = os.path.join(GDB_PATH, "LST_Stats")
+arcpy.sa.ZonalStatisticsAsTable(neighborhoods, ZONE_FIELD, lst_tif, lst_table, "DATA", "MEAN")
+
+arcpy.management.JoinField(neighborhoods, ZONE_FIELD, lst_table, ZONE_FIELD, ["MEAN"])
+arcpy.management.AlterField(neighborhoods, "MEAN", "Mean_Temp_C", "Mean Temp (C)")
+
+# 2. Extract and Join Vegetation Health Data
+print("    -> Aggregating mean vegetation indices per municipal zone...")
+ndvi_table = os.path.join(GDB_PATH, "NDVI_Stats")
+arcpy.sa.ZonalStatisticsAsTable(neighborhoods, ZONE_FIELD, ndvi_tif, ndvi_table, "DATA", "MEAN")
+
+arcpy.management.JoinField(neighborhoods, ZONE_FIELD, ndvi_table, ZONE_FIELD, ["MEAN"])
+arcpy.management.AlterField(neighborhoods, "MEAN", "Mean_NDVI_Score", "Mean NDVI")
+
+print("[+] PIPELINE COMPLETE: Spatial Analysis successfully synthesized into vector format.")
