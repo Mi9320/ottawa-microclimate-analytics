@@ -1,6 +1,6 @@
 # Ottawa Microclimate & Canopy Analytics Platform
 
-**[View the Live Interactive Dashboard Here](https://mirzai3.maps.arcgis.com/apps/dashboards/801e9deb8ad349afabfbf8baad8b318c#mode=edit)**
+**[View the Live Interactive Dashboard Here](https://www.arcgis.com/apps/dashboards/801e9deb8ad349afabfbf8baad8b318c)**
 
 ## Project Overview
 This project is an automated spatial ETL pipeline and interactive web application designed to mathematically quantify the inverse correlation between urban canopy density and microclimate surface temperatures across 116 municipal neighborhoods in Ottawa, Ontario.
