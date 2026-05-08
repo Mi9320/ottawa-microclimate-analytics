@@ -12,7 +12,7 @@ The solution required bridging dynamic municipal vector databases with static or
 * Processed over 300,000 raw tree inventory points from the City of Ottawa. 
 * Executed complex spatial joins to aggregate tree counts within 116 unique Ottawa Neighbourhood Study (ONS) administrative boundaries.
 
-### Phase 2: Spatial Analytics & Raster Math (Python / ArcPy) [ArcPy script](ArcPy Script) 
+### Phase 2: Spatial Analytics & Raster Math (Python / ArcPy) [ArcPy script](https://github.com/Mi9320/ottawa-microclimate-analytics/blob/main/ArcPy%20script) 
 <img width="1915" height="1018" alt="ArcGIS Pro (2)" src="https://github.com/user-attachments/assets/46035093-7ec0-4f8e-9d4e-14cae2e53495" />
 
 * **Multispectral Processing:** Extracted Band 4 (Red) and Band 8 (NIR) from Sentinel-2 telemetry to compute the Normalized Difference Vegetation Index (NDVI), creating a seamless raster mosaic.
