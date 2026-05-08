@@ -8,7 +8,7 @@ This project is an automated spatial ETL pipeline and interactive web applicatio
 ## Technical Architecture
 * **Data Engineering (ETL):** FME was utilized to process and execute spatial joins on >300,000 municipal tree asset vectors against administrative boundaries.
 * **Spatial Analytics:** Python and ArcPy were deployed to process Level-2 satellite imagery, executing Zonal Statistics to calculate mean surface temperatures and tree counts per neighborhood.
-* **Application Deployment:** The final payload was optimized for cloud hosting and deployed via ArcGIS Dashboards, featuring dynamic spatial queries, hardware-accelerated UI, and application-tier data filtering (`Shape__Area > 1000 AND Tree_Count > 0`) to eliminate topological slivers and database duplication.
+* **Application Deployment:** Deployed an interactive ArcGIS Dashboard featuring dynamic spatial queries and application-tier topological filtering (Tree_Count > 0) to silently resolve vector duplication errors and deliver actionable intelligence to urban planners.
 
 ## Data Sources & Citations: 
 
